@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LifeGo - HTML 版圍棋</title>
+  <style>
+    :root { color:#172033; background:#eef1f5; font-family:Inter,"Noto Sans TC",system-ui,sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 15% 10%,rgba(64,120,192,.09),transparent 26rem),#eef1f5; }
+    button,select { font:inherit; }
+    .app { width:min(1180px,calc(100% - 32px)); margin:auto; padding:24px 0 40px; }
+    .top { display:flex; align-items:end; justify-content:space-between; margin-bottom:16px; }
+    .top h1 { margin:2px 0 0; font-size:clamp(24px,3vw,36px); }
+    .eyebrow { margin:0; color:#63708a; font-size:12px; font-weight:800; letter-spacing:.18em; }
+    .badge { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 14px; border:1px solid #d9dfe9; border-radius:12px; background:#fff; }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:20px; align-items:start; }
+    .board-wrap { position:relative; display:grid; place-items:center; padding:18px; border:1px solid #dde3ec; border-radius:18px; background:rgba(255,255,255,.78); box-shadow:0 18px 50px rgba(30,42,70,.09); }
+    canvas { width:min(100%,680px); height:auto; aspect-ratio:1; display:block; cursor:crosshair; touch-action:manipulation; }
+    .message { position:absolute; inset:18px; display:none; place-items:center; border-radius:8px; background:rgba(22,27,38,.78); color:#fff; font-size:clamp(20px,4vw,34px); font-weight:800; text-align:center; }
+    .message.show { display:grid; }
+    .panel { display:flex; flex-direction:column; gap:12px; }
+    .card { border:1px solid #dde3ec; border-radius:14px; background:#fff; padding:16px; box-shadow:0 8px 24px rgba(30,42,70,.04); }
+    .card h2 { margin:0 0 12px; font-size:15px; }
+    .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+    label { display:grid; gap:6px; color:#69748a; font-size:12px; font-weight:700; }
+    select { width:100%; min-height:40px; border:1px solid #cfd6e2; border-radius:8px; background:#f9fafc; color:#263249; padding:8px; }
+    button { min-height:42px; border-radius:9px; border:0; cursor:pointer; font-weight:800; }
+    .primary { width:100%; background:#2f64bd; color:#fff; }
+    .secondary { background:#edf2fa; color:#315f9e; }
+    .ghost { background:#fff; color:#748096; border:1px solid #dce2eb; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid #edf0f5; border-radius:10px; overflow:hidden; margin-bottom:10px; }
+    .stats div { display:grid; gap:3px; padding:10px; text-align:center; border-right:1px solid #edf0f5; }
+    .stats div:last-child { border-right:0; }
+    .stats span { color:#7b8495; font-size:11px; }
+    #status { min-height:36px; margin:0; color:#59657a; font-size:13px; line-height:1.45; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .actions .ghost { grid-column:1/-1; }
+    .hint { margin:0; color:#737f92; font-size:12px; line-height:1.55; }
+    @media(max-width:860px) { .layout{grid-template-columns:1fr}.panel{display:grid;grid-template-columns:1fr 1fr} }
+    @media(max-width:560px) { .app{width:calc(100% - 20px);padding-top:12px}.panel{grid-template-columns:1fr}.board-wrap{padding:8px}.message{inset:8px}.badge{font-size:12px} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div><p class="eyebrow">LIFEGO</p><h1>圍棋對戰</h1></div>
+      <div class="badge" id="badge"><strong>輪到黑棋</strong></div>
+    </header>
+    <section class="layout">
+      <div class="board-wrap">
+        <canvas id="board" aria-label="圍棋棋盤"></canvas>
+        <div class="message" id="message"></div>
+      </div>
+      <aside class="panel">
+        <section class="card">
+          <h2>棋局設定</h2>
+          <div class="fields">
+            <label>路數<select id="size"><option value="9">9 路</option><option value="13">13 路</option><option value="19" selected>19 路</option></select></label>
+            <label>執棋<select id="human"><option value="B" selected>執黑先行</option><option value="W">執白後行</option></select></label>
+            <label>規則<select id="mode"><option value="standard" selected>標準規則</option><option value="handicap">讓棋</option></select></label>
+            <label>讓子<select id="handicap"><option value="0">不讓子</option><option value="2">讓 2 子</option><option value="3">讓 3 子</option><option value="4">讓 4 子</option><option value="6">讓 6 子</option><option value="9">讓 9 子</option></select></label>
+            <label>AI 段位<select id="aiLevel"><option value="beginner">入門 15 級</option><option value="casual" selected>初級 10 級</option><option value="intermediate">中級 5 級</option><option value="advanced">上級 1 級</option><option value="expert">檔次 1 準</option></select></label>
+          </div>
+          <button class="primary" id="newGame">開始新棋局</button>
+        </section>
+        <section class="card">
+          <h2>對局狀態</h2>
+          <div class="stats"><div><span>黑棋</span><strong id="black">0</strong></div><div><span>白棋</span><strong id="white">0.5</strong></div><div><span>手數</span><strong id="count">0</strong></div></div>
+          <p id="status">準備開始對局</p>
+        </section>
+        <section class="card actions">
+          <button class="secondary" id="undo">悔棋</button>
+          <button class="secondary" id="pass">虛手 Pass</button>
+          <button class="ghost" id="restart">重開本局</button>
+        </section>
+        <section class="card"><h2>規則說明</h2><p class="hint">採基本中國面積計分：棋子數加領地，白棋貼目 6.5。連續兩次 Pass 結束對局；簡單劫會阻止立即重複棋局。9 路棋譜庫內含 10 局公開 Mini-Go 職業對局序列（CWI 公開盤庫，1987–1988）；中高段位會優先匹配棋譜前綴並模擬對手反擊。<br><a href="https://homepages.cwi.nl/~aeb/go/games/games/other_sizes/9x9/Minigo/" target="_blank" rel="noopener">棋譜來源</a></p></section>
+      </aside>
+    </section>
+  </main>
+  <script>
+    // Public 9x9 professional Mini-Go records. Source:
+    // https://homepages.cwi.nl/~aeb/go/games/games/other_sizes/9x9/Minigo/
+    // Coordinates are SGF lower-case letters, converted in publicBookMove().
+    const public9x9Books=[
+      "B[ee] W[ge] B[gf] W[cf] B[fe] W[dd] B[ec] W[dc] B[eb] W[gg] B[ff] W[fh] B[dg] W[cg] B[eh] W[hf] B[he] W[ie] B[hd] W[hh] B[cb] W[eg] B[fg] W[dh] B[ef] W[ei] B[bd] W[cd] B[be] W[ce] B[cc] W[db] B[da] W[bf] B[id] W[ed] B[fd] W[if] B[eg] W[bh] B[ae] W[af] B[bc]",
+      "B[ee] W[gc] B[ec] W[ge] B[gf] W[hf] B[ff] W[cf] B[hg] W[he] B[cg] W[bg] B[bh] W[dg] B[ch] W[df] B[cd] W[cc] B[bd] W[fh] B[dh] W[dd] B[de] W[dc] B[ce] W[ed] B[fe] W[hh] B[gh] W[ig] B[gg] W[gi]",
+      "B[ee] W[gd] B[fc] W[gc] B[gf] W[ec] B[dc] W[eb] B[ed] W[db] B[cc] W[cg] B[dh] W[ce] B[ch] W[dd] B[cb] W[fd] B[df] W[de] B[bd] W[ef] B[fe] W[ff] B[ge] W[dg] B[gg] W[eh] B[fh] W[eg] B[bh] W[be] B[bg] W[ad] B[ac] W[ae] B[bb] W[cd] B[ei] W[bc] B[gb] W[fb] B[bd] W[ca] B[ba] W[bc] B[da] W[ab]",
+      "B[ee] W[cc] B[ce] W[ec] B[eg] W[gd] B[fd] W[gc] B[fc] W[fb] B[gb] W[hb] B[eb] W[ga] B[dc] W[db] B[ed] W[ea] B[ge] W[cd] B[be] W[he] B[gf] W[hf] B[hg] W[ig] B[hh] W[bd] B[cb] W[ec] B[dd] W[bb] B[ad] W[bc] B[ab] W[ih] B[ac] W[ca] B[hi] W[if] B[ae] W[eb]",
+      "B[ee] W[ge] B[eg] W[ce] B[ec] W[gc] B[cc] W[df] B[ef] W[dg] B[hf] W[gf] B[gg] W[he] B[bg] W[bf] B[dh] W[ch] B[eh] W[bh] B[bd] W[hg] B[hh] W[if] B[ci] W[bi] B[fb] W[gb] B[be] W[ag] B[ih] W[ga] B[fc] W[fa] B[ea] W[cd] B[dd] W[bc] B[de] W[cf] B[bb] W[ae] B[ac] W[fg] B[gh] W[ff] B[ig] W[fh] B[fi] W[fd] B[fe] W[hf] B[di]",
+      "B[ee] W[ge] B[gf] W[cf] B[fe] W[dd] B[ec] W[dc] B[eb] W[gg] B[ff] W[hf] B[he] W[fg] B[eg] W[eh] B[dg] W[dh] B[cg] W[db] B[bf] W[be] B[ce] W[cd] B[hg] W[hh] B[if] W[ih] B[da] W[ed] B[fd] W[de] B[cb] W[bg] B[bh] W[af] B[ch] W[fc] B[fb] W[gc] B[gb] W[ea] B[fa] W[bb] B[ba] W[cc] B[ca] W[ab] B[bc] W[ac] B[di] W[fh] B[ei] W[gi] B[ci] W[fi] B[ah] W[df] B[ef] W[ig] B[hf] W[ag] B[hc]",
+      "B[ef] W[ed] B[fd] W[fc] B[fe] W[gc] B[dd] W[ec] B[de] W[eh] B[dc] W[he] B[hf] W[ge] B[gf] W[fg] B[ff] W[cg] B[ie] W[hb] B[eb] W[fb] B[db] W[hd] B[bf] W[cf] B[be] W[bg] B[gh] W[gg] B[fh] W[eg] B[hg] W[ce] B[cd] W[af] B[bd] W[fi] B[hh] W[df] B[gi] W[ch] B[ei] W[di] B[id] W[ic] B[if] W[fa] B[gd] W[hc] B[ae] W[ag] B[ee] W[ea] B[da]",
+      "B[ee] W[ec] B[dc] W[dg] B[eb] W[fc] B[fb] W[dd] B[ed] W[gc] B[ge] W[db] B[cc] W[cb] B[gb] W[hb] B[hc] W[hd] B[ic] W[gd] B[ha] W[de] B[ef] W[bc] B[df] W[cg] B[cf] W[be] B[bf] W[fh] B[bh] W[gg]",
+      "B[ee] W[ge] B[ce] W[fc] B[gf] W[hf] B[ff] W[hg] B[ec] W[eb] B[fb] W[ed] B[dc] W[gb] B[fd] W[gc] B[gd] W[hd] B[fe] W[fh] B[eh] W[eg] B[dh] W[fg] B[dg] W[he] B[db] W[df] B[ef] W[cf] B[cg] W[fa] B[da] W[bf] B[bg]",
+      "B[ee] W[cc] B[ce] W[ec] B[fc] W[fb] B[gb] W[fd] B[gc] W[ed] B[fe] W[gd] B[eb] W[db] B[fa] W[gg] B[fh] W[fg] B[eg] W[gh] B[eh] W[hd] B[hc] W[be] B[bf] W[bd] B[cg] W[da] B[ea] W[ge] B[gi] W[hi] B[fi] W[ff] B[ef] W[hh] B[dd] W[cd] B[id] W[ie] B[ic] W[af] B[ag] W[ae]"
+    ];
+
+    function publicBookMove(game,color){
+      if(game.size!==9||game.moveHistory.length===0)return null;
+      const prefix=game.moveHistory.map(v=>`${v.color}[${String.fromCharCode(97+v.c)}${String.fromCharCode(97+v.r)}]`).join(" ");
+      const candidates=[];
+      for(const book of public9x9Books){
+        if(book.startsWith(prefix)){
+          const rest=book.slice(prefix.length).trim();
+          const match=rest.match(/^([BW])\[([a-i])([a-i])\]/);
+          if(match&&match[1]===color)candidates.push({r:match[3].charCodeAt(0)-97,c:match[2].charCodeAt(0)-97});
+        }
+      }
+      return candidates.length?candidates[Math.floor(Math.random()*candidates.length)]:null;
+    }
+
+    class GoGame {
+      constructor(size=19){ this.size=size; this.reset(); }
+      reset(){ this.board=Array.from({length:this.size},()=>Array(this.size).fill(null)); this.turn="B"; this.history=[]; this.moveHistory=[]; this.pass=0; this.ended=false; this.previous=null; this.komi=6.5; this.lastMove=null; }
+      neighbors(r,c){ const a=[]; if(r>0)a.push([r-1,c]); if(r<this.size-1)a.push([r+1,c]); if(c>0)a.push([r,c-1]); if(c<this.size-1)a.push([r,c+1]); return a; }
+      key(board=this.board){ return board.map(row=>row.map(v=>v||".").join("")).join("/"); }
+      clone(board=this.board){ return board.map(row=>[...row]); }
+      snapshot(){ return {board:this.clone(),turn:this.turn,pass:this.pass,ended:this.ended,previous:this.previous}; }
+      restore(s){ this.board=this.clone(s.board); this.turn=s.turn; this.pass=s.pass; this.ended=s.ended; this.previous=s.previous; }
+      group(r,c,board=this.board){
+        const color=board[r][c], stones=[], seen=new Set(), stack=[[r,c]], liberties=new Set();
+        if(!color)return {stones,liberties};
+        while(stack.length){ const [rr,cc]=stack.pop(), k=rr+","+cc; if(seen.has(k)||board[rr][cc]!==color)continue; seen.add(k); stones.push([rr,cc]); for(const [nr,nc] of this.neighbors(rr,cc)){ if(!board[nr][nc])liberties.add(nr+","+nc); else if(board[nr][nc]===color)stack.push([nr,nc]); } }
+        return {stones,liberties};
+      }
+      play(r,c){
+        if(this.ended)return {ok:false,reason:"對局已結束"};
+        if(r<0||c<0||r>=this.size||c>=this.size||this.board[r][c])return {ok:false,reason:this.board[r]?.[c]?"此處已有棋子":"落子位置無效"};
+        const before=this.snapshot(), board=this.clone(), opponent=this.turn==="B"?"W":"B"; board[r][c]=this.turn;
+        const checked=new Set(); let captured=[];
+        for(const [nr,nc] of this.neighbors(r,c)){ if(board[nr][nc]!==opponent)continue; const g=this.group(nr,nc,board), k=g.stones.map(v=>v.join(",")).join("|"); if(checked.has(k))continue; g.stones.forEach(v=>checked.add(v.join(","))); if(g.liberties.size===0)captured.push(...g.stones); }
+        captured.forEach(([rr,cc])=>board[rr][cc]=null);
+        if(this.group(r,c,board).liberties.size===0)return {ok:false,reason:"禁止自殺落子"};
+        if(this.previous===this.key(board))return {ok:false,reason:"簡單劫：不能立即重複棋局"};
+        this.history.push(before); this.moveHistory.push({r,c,color:this.turn}); this.board=board; this.pass=0; this.previous=before.board?this.key(before.board):null; this.lastMove={r,c,color:this.turn}; this.turn=opponent;
+        return {ok:true,captured:captured.length};
+      }
+      passTurn(){ if(this.ended)return false; this.history.push(this.snapshot()); this.moveHistory.push({pass:true,color:this.turn}); this.pass++; this.previous=null; this.lastMove=null; if(this.pass>=2)this.ended=true; this.turn=this.turn==="B"?"W":"B"; return true; }
+      undo(){ if(!this.history.length)return false; this.restore(this.history.pop()); this.moveHistory.pop(); this.lastMove=this.moveHistory.length?this.moveHistory[this.moveHistory.length-1]:null; return true; }
+      setupHandicap(count){
+        if(!count)return; const n=this.size;
+        const pts=n===19?[[3,3],[3,15],[15,3],[15,15],[9,9],[9,3],[9,15],[3,9],[15,9]]:n===13?[[3,3],[3,9],[9,3],[9,9],[6,6],[6,3],[6,9],[3,6],[9,6]]:[[2,2],[2,6],[6,2],[6,6],[4,4],[4,2],[4,6],[2,4],[6,4]];
+        for(let i=0;i<count&&i<pts.length;i++)this.board[pts[i][0]][pts[i][1]]="B"; this.turn="W";
+      }
+      legalMoves(color){
+        const old=this.turn; this.turn=color; const moves=[];
+        for(let r=0;r<this.size;r++)for(let c=0;c<this.size;c++)if(!this.board[r][c]){const result=this.play(r,c); if(result.ok){moves.push({r,c,captured:result.captured}); this.undo();}}
+        this.turn=old; return moves;
+      }
+      aiMove(color){
+        const moves=this.legalMoves(color); if(!moves.length)return null;
+        const level=typeof aiLevel==="undefined"?"casual":aiLevel;
+        const levelSettings={
+          beginner:{mistake:.48,random:8,attack:2,capture:10,shape:1,book:0},
+          casual:{mistake:.28,random:5,attack:5,capture:16,shape:2,book:4},
+          intermediate:{mistake:.12,random:2.5,attack:9,capture:24,shape:5,book:8},
+          advanced:{mistake:.04,random:1.2,attack:15,capture:32,shape:8,book:14},
+          expert:{mistake:.01,random:.5,attack:20,capture:42,shape:12,book:20}
+        };
+        const s=levelSettings[level]||levelSettings.casual;
+        const center=(this.size-1)/2, opponent=color==="B"?"W":"B";
+
+        if(modeSelect.value==="standard" && this.moveHistory.length>0){
+          const bookMove=publicBookMove(this,color);
+          const bookChance={beginner:.08,casual:.18,intermediate:.42,advanced:.68,expert:.90}[level]||.18;
+          if(bookMove){
+            const legal= moves.find(m=>m.r===bookMove.r&&m.c===bookMove.c);
+            if(legal&&Math.random()<bookChance) return legal;
+          }
+        }
+
+        if(s.book&&this.history.length<12){
+          const star=this.size===19?3:this.size===13?3:2;
+          const far=this.size-1-star;
+          const candidates=[[star,star],[star,far],[far,star],[far,far],[center,center]];
+          for(const [r,c] of candidates){
+            if(!this.board[r][c]){
+              const test=moves.find(m=>m.r===r&&m.c===c);
+              if(test)return test;
+            }
+          }
+        }
+
+        return moves.map(m=>{
+          let rank=-Math.abs(m.r-center)*.12*s.shape-Math.abs(m.c-center)*.12*s.shape+Math.random()*s.random;
+          rank-=m.r<1||m.c<1||m.r>this.size-2||m.c>this.size-2? -2*s.shape:0;
+
+          for(const [r,c] of this.neighbors(m.r,m.c)){
+            const value=this.board[r][c];
+            if(value===opponent){
+              const g=this.group(r,c);
+              if(g.liberties.size===1)rank+=(s.attack+g.stones.length*2);
+              if(g.liberties.size===2)rank+=g.stones.length*s.attack*.25;
+            }else if(value===color){
+              const g=this.group(r,c);
+              if(g.liberties.size===2)rank+=g.stones.length*s.shape*.15;
+              if(g.liberties.size===1)rank+=s.attack*.5;
+            }
+          }
+
+          if(m.captured>0)rank+=m.captured*s.capture;
+          const candidateBoard=this.clone();
+          candidateBoard[m.r][m.c]=color;
+          const own=this.group(m.r,m.c,candidateBoard);
+          if(own.liberties.size===1)rank-=s.attack*2.5;
+
+          if(level==="beginner"&&Math.random()<s.mistake)rank+=Math.random()*30-15;
+          if(level==="casual"&&Math.random()<s.mistake)rank-=Math.random()*10;
+          if(level==="intermediate"||level==="advanced"||level==="expert"){
+            const opponentNear=this.neighbors(m.r,m.c).filter(([r,c])=>this.board[r][c]===opponent).length;
+            rank+=opponentNear*s.attack*.22;
+            if(level==="advanced"||level==="expert"){
+              const played=this.play(m.r,m.c);
+              if(played.ok){
+                const reply=this.legalMoves(opponent).sort((a,b)=>{
+                  if(b.captured!==a.captured)return b.captured-a.captured;
+                  return this.group(b.r,b.c).liberties.size-this.group(a.r,a.c).liberties.size;
+                })[0];
+                if(reply&&reply.captured>0)rank-=reply.captured*(level==="expert"?24:16);
+                const centerReply=this.size>9? reply? -Math.abs(reply.r-center)-Math.abs(reply.c-center):0:0;
+                rank+=centerReply*.1;
+                this.undo();
+              }
+            }
+          }
+          return {...m,rank};
+        }).sort((a,b)=>b.rank-a.rank)[0];
+      }
+      score(){
+        const territory={B:0,W:0}, seen=new Set();
+        for(let r=0;r<this.size;r++)for(let c=0;c<this.size;c++){
+          if(this.board[r][c]||seen.has(r+","+c))continue;
+          const region=[], borders=new Set(), stack=[[r,c]];
+          while(stack.length){const [rr,cc]=stack.pop(),k=rr+","+cc;if(seen.has(k)||this.board[rr][cc])continue;seen.add(k);region.push([rr,cc]);for(const[nr,nc]of this.neighbors(rr,cc)){if(this.board[nr][nc])borders.add(this.board[nr][nc]);else if(!seen.has(nr+","+nc))stack.push([nr,nc]);}}
+          if(borders.size===1)territory[[...borders][0]]+=region.length;
+        }
+        let b=0,w=0;for(const row of this.board)for(const v of row){if(v==="B")b++;if(v==="W")w++;}
+        return {B:b+territory.B,W:w+territory.W+this.komi};
+      }
+    }
+
+    const canvas=document.querySelector("#board"), ctx=canvas.getContext("2d");
+    const sizeSelect=document.querySelector("#size"), humanSelect=document.querySelector("#human"), modeSelect=document.querySelector("#mode"), handicapSelect=document.querySelector("#handicap"), aiLevelSelect=document.querySelector("#aiLevel");
+    let game=new GoGame(19), human="B", ai="W", aiLevel="casual", thinking=false, timer=null;
+
+    function stars(size){return size===19?[3,9,15]:size===13?[3,6,9]:[2,4,6];}
+    function draw(){
+      const rect=canvas.getBoundingClientRect(), dpr=devicePixelRatio||1, w=rect.width, pad=w*.055, step=(w-pad*2)/(game.size-1);
+      canvas.width=Math.round(w*dpr);canvas.height=Math.round(w*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,w);ctx.fillStyle="#ddb66d";ctx.fillRect(0,0,w,w);
+      ctx.strokeStyle="rgba(71,51,25,.78)";ctx.lineWidth=Math.max(1,w/700);
+      for(let i=0;i<game.size;i++){const p=pad+i*step;ctx.beginPath();ctx.moveTo(pad,p);ctx.lineTo(w-pad,p);ctx.stroke();ctx.beginPath();ctx.moveTo(p,pad);ctx.lineTo(p,w-pad);ctx.stroke();}
+      for(const r of stars(game.size))for(const c of stars(game.size)){ctx.beginPath();ctx.arc(pad+c*step,pad+r*step,Math.max(2.2,w*.006),0,Math.PI*2);ctx.fillStyle="#4c3519";ctx.fill();}
+      for(let r=0;r<game.size;r++)for(let c=0;c<game.size;c++){const v=game.board[r][c];if(!v)continue;const x=pad+c*step,y=pad+r*step,rad=step*.46;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);const g=ctx.createRadialGradient(x-rad*.3,y-rad*.35,1,x,y,rad);if(v==="B"){g.addColorStop(0,"#777");g.addColorStop(.25,"#303030");g.addColorStop(1,"#080808");}else{g.addColorStop(0,"#fff");g.addColorStop(.8,"#eee");g.addColorStop(1,"#bbb");}ctx.fillStyle=g;ctx.fill();ctx.strokeStyle=v==="W"? "#aaa":"#111";ctx.stroke();if(game.lastMove&&game.lastMove.r===r&&game.lastMove.c===c){ctx.beginPath();ctx.arc(x,y,Math.max(2,rad*.22),0,Math.PI*2);ctx.fillStyle=v==="B"?"#fff":"#111";ctx.fill();}}
+    }
+    function update(){
+      const s=game.score();document.querySelector("#black").textContent=Number.isInteger(s.B)?s.B:s.B.toFixed(1);document.querySelector("#white").textContent=Number.isInteger(s.W)?s.W:s.W.toFixed(1);document.querySelector("#count").textContent=game.history.length;
+      if(game.ended){const winner=s.B>s.W?"黑棋":s.W>s.B?"白棋":"平手";document.querySelector("#badge").innerHTML=`<strong>對局結束</strong>`;document.querySelector("#status").textContent=`終局：${winner}勝（黑 ${s.B}／白 ${s.W}）`;document.querySelector("#message").textContent=winner+"勝";document.querySelector("#message").classList.add("show");}
+      else if(thinking){document.querySelector("#badge").innerHTML=`<strong>AI 思考中</strong>`;document.querySelector("#status").textContent="AI 正在選擇合法落點...";}
+      else{const name=game.turn==="B"?"黑棋":"白棋";document.querySelector("#badge").innerHTML=`<strong>輪到${name}</strong>`;const levelName=aiLevelSelect.options[aiLevelSelect.selectedIndex].text;document.querySelector("#status").textContent=game.turn===human?`輪到你執${name==="黑棋"?"黑":"白"}棋落子。`:`輪到 AI（${levelName}）落子。`;}
+      document.querySelector("#undo").disabled=thinking||!game.history.length;document.querySelector("#pass").disabled=thinking||game.ended;draw();
+    }
+    function aiTurn(){thinking=true;update();timer=setTimeout(()=>{const move=game.aiMove(ai);if(move)game.play(move.r,move.c);else game.passTurn();thinking=false;timer=null;update();},550);}
+    function maybeAi(){if(!game.ended&&game.turn===ai)aiTurn();}
+    canvas.addEventListener("click",e=>{if(game.ended||thinking||game.turn!==human)return;const rect=canvas.getBoundingClientRect(),pad=rect.width*.055,step=(rect.width-pad*2)/(game.size-1),c=Math.round((e.clientX-rect.left-pad)/step),r=Math.round((e.clientY-rect.top-pad)/step);if(r<0||c<0||r>=game.size||c>=game.size)return;const result=game.play(r,c);if(!result.ok)document.querySelector("#status").textContent=result.reason;update();if(result.ok)maybeAi();});
+    function newGame(){if(timer)clearTimeout(timer);timer=null;thinking=false;game=new GoGame(Number(sizeSelect.value));human=humanSelect.value;ai=human==="B"?"W":"B";aiLevel=aiLevelSelect.value;if(modeSelect.value==="handicap")game.setupHandicap(Number(handicapSelect.value));document.querySelector("#message").classList.remove("show");update();maybeAi();}
+    document.querySelector("#newGame").addEventListener("click",newGame);
+    document.querySelector("#restart").addEventListener("click",()=>{if(timer)clearTimeout(timer);timer=null;thinking=false;game=new GoGame(Number(sizeSelect.value));human=humanSelect.value;ai=human==="B"?"W":"B";aiLevel=aiLevelSelect.value;if(modeSelect.value==="handicap")game.setupHandicap(Number(handicapSelect.value));document.querySelector("#message").classList.remove("show");update();maybeAi();});
+    aiLevelSelect.addEventListener("change",()=>{aiLevel=aiLevelSelect.value;update();});
+    document.querySelector("#undo").addEventListener("click",()=>{if(thinking)return;game.undo();if(game.turn===ai)game.undo();document.querySelector("#message").classList.remove("show");update();});
+    document.querySelector("#pass").addEventListener("click",()=>{if(game.ended||thinking||game.turn!==human)return;game.passTurn();document.querySelector("#message").classList.remove("show");update();if(!game.ended)maybeAi();});
+    addEventListener("resize",draw);newGame();
+  </script>
+</body>
+</html>

@@ -1,2 +1,33 @@
 # LifeOS-
 個人生活管理系統
+
+## LifeGo 圍棋 MVP
+
+### 單檔 HTML 版（不需安裝）
+
+直接雙擊 `standalone.html`，或在瀏覽器開啟此檔案即可使用。
+也可直接雙擊 `index.html`；它會自動導向 `standalone.html`。
+
+開啟方式：
+
+1. 安裝 Node.js 18 或以上
+2. 在專案目錄執行 `npm start`
+3. 瀏覽器開啟 `http://localhost:4173`
+
+也可直接使用支援 ES module 的瀏覽器開啟 `index.html`（部分瀏覽器會限制本地 module，建議使用 HTTP server）。
+
+功能：
+- 9／13／19 路棋盤，標準與讓棋模式
+- 玩家執黑或執白，輪流落子、提子、無自殺與簡單劫
+- 連續兩次 Pass 結束並依基本中國面積計分（白貼目 6.5）
+- AI 段位：入門 15 級、初級 10 級、中級 5 級、上級 1 級、檔次 1 準
+- 9 路棋譜庫內含 10 局公開 Mini-Go 職業對局序列；中高段位會匹配棋譜前綴並模擬對手反擊
+- 中高段位加入角部星位／三三、提子防守、形狀與自殺避免等布局原則
+- 棋譜來源：https://homepages.cwi.nl/~aeb/go/games/games/other_sizes/9x9/Minigo/
+- 本地 AI 思考狀態、最後落子標記、悔棋、重開與新棋局
+
+核心規則測試：
+
+```sh
+node --test tests/go-core.test.js
+```
