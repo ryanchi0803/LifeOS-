@@ -99,15 +99,23 @@
       "B[ee] W[cc] B[ce] W[ec] B[fc] W[fb] B[gb] W[fd] B[gc] W[ed] B[fe] W[gd] B[eb] W[db] B[fa] W[gg] B[fh] W[fg] B[eg] W[gh] B[eh] W[hd] B[hc] W[be] B[bf] W[bd] B[cg] W[da] B[ea] W[ge] B[gi] W[hi] B[fi] W[ff] B[ef] W[hh] B[dd] W[cd] B[id] W[ie] B[ic] W[af] B[ag] W[ae]"
     ];
 
+    // Public 19x19 professional game record: Lee Sedol vs AlphaGo, Game 1.
+    // Source: https://homepages.cwi.nl/~aeb/go/games/games/AlphaGo/LeeSedol/1.sgf
+    const public19x19Books=[
+      "B[qd] W[dd] B[pq] W[dp] B[fc] W[cf] B[ql] W[od] B[ld] W[qc] B[rc] W[pc] B[re] W[of] B[pg] W[og] B[ph] W[id] B[lf] W[oh] B[pi] W[lh] B[kh] W[ke] B[le] W[lg] B[kg] W[kf]"
+    ];
+
     function publicBookMove(game,color){
-      if(game.size!==9||game.moveHistory.length===0)return null;
-      const prefix=game.moveHistory.map(v=>`${v.color}[${String.fromCharCode(97+v.c)}${String.fromCharCode(97+v.r)}]`).join(" ");
+      if(game.moveHistory.length===0)return null;
+      const alphabet="abcdefghijklmnopqrstuvwxyz";
+      const prefix=game.moveHistory.map(v=>`${v.color}[${alphabet[v.c]}${alphabet[v.r]}]`).join(" ");
+      const books=game.size===9?public9x9Books:game.size===19?public19x19Books:[];
       const candidates=[];
-      for(const book of public9x9Books){
+      for(const book of books){
         if(book.startsWith(prefix)){
           const rest=book.slice(prefix.length).trim();
-          const match=rest.match(/^([BW])\[([a-i])([a-i])\]/);
-          if(match&&match[1]===color)candidates.push({r:match[3].charCodeAt(0)-97,c:match[2].charCodeAt(0)-97});
+          const match=rest.match(/^([BW])\[([a-z])([a-z])\]/);
+          if(match&&match[1]===color)candidates.push({r:alphabet.indexOf(match[3]),c:alphabet.indexOf(match[2])});
         }
       }
       return candidates.length?candidates[Math.floor(Math.random()*candidates.length)]:null;
@@ -185,7 +193,7 @@
           const bookChance={beginner:.08,casual:.18,intermediate:.42,advanced:.68,expert:.90}[level]||.18;
           if(bookMove){
             const legal= moves.find(m=>m.r===bookMove.r&&m.c===bookMove.c);
-            if(legal&&Math.random()<bookChance) return legal;
+              if(legal&&Math.random()<bookChance) return {...legal,reason:"公開棋譜前綴匹配"};
           }
         }
 
@@ -196,7 +204,7 @@
           for(const [r,c] of candidates){
             if(!this.board[r][c]){
               const test=moves.find(m=>m.r===r&&m.c===c);
-              if(test)return test;
+              if(test)return {...test,reason:"角部布局：星位定式"};
             }
           }
         }
@@ -253,9 +261,9 @@
         }).sort((a,b)=>b.rank-a.rank);
 
         if(level==="advanced"||level==="expert"){
-          const rolloutCount=level==="expert"?3:2;
-          const rolloutPly=level==="expert"?8:6;
-          for(const candidate of ranked.slice(0,level==="expert"?4:3)){
+          const rolloutCount=level==="expert"?(this.size===9?3:1):1;
+          const rolloutPly=level==="expert"?(this.size===9?8:4):4;
+          for(const candidate of ranked.slice(0,level==="expert"?(this.size===9?4:2):2)){
             let total=0;
             for(let sample=0;sample<rolloutCount;sample++){
               const before=this.snapshot();
@@ -277,7 +285,11 @@
           }
           ranked.sort((a,b)=>b.rank-a.rank);
         }
-        return ranked[0];
+        const chosen=ranked[0];
+        if(chosen.captured>0)chosen.reason="戰術選擇：優先提子";
+        else if(level==="advanced"||level==="expert")chosen.reason="局面展望：反擊與地盤評估";
+        else chosen.reason="形勢評估：連接與防守";
+        return chosen;
       }
       score(){
         const territory={B:0,W:0}, seen=new Set();
@@ -333,7 +345,7 @@
       else{const name=game.turn==="B"?"黑棋":"白棋";document.querySelector("#badge").innerHTML=`<strong>輪到${name}</strong>`;const levelName=aiLevelSelect.options[aiLevelSelect.selectedIndex].text;document.querySelector("#status").textContent=game.turn===human?`輪到你執${name==="黑棋"?"黑":"白"}棋落子。`:`輪到 AI（${levelName}）落子。`;}
       document.querySelector("#undo").disabled=thinking||!game.history.length;document.querySelector("#pass").disabled=thinking||game.ended;draw();
     }
-    function aiTurn(){thinking=true;update();timer=setTimeout(async()=>{const level=aiLevelSelect.value;const move=await katagoMove(ai,level);if(move)game.play(move.r,move.c);else game.passTurn();thinking=false;timer=null;update();},550);}
+    function aiTurn(){thinking=true;update();timer=setTimeout(async()=>{const level=aiLevelSelect.value;const move=await katagoMove(ai,level);if(move){game.play(move.r,move.c);thinking=false;timer=null;update();document.querySelector("#status").textContent=`AI落子：${move.reason||"規則型走子"}（${String.fromCharCode(65+(move.c>=8?move.c+1:move.c))}${game.size-move.r}）`; }else {game.passTurn();thinking=false;timer=null;update();}},550);}
     function maybeAi(){if(!game.ended&&game.turn===ai)aiTurn();}
     function stopDemo(){
       demoMode=false;
@@ -350,11 +362,13 @@
       demoTimer=setTimeout(async()=>{
         const level=game.turn==="B"?demoBlackSelect.value:demoWhiteSelect.value;
         const move=await katagoMove(game.turn,level);
-        if(move)game.play(move.r,move.c);
+        let reason="";
+        if(move){reason=move.reason||"規則型走子";game.play(move.r,move.c);}
         else game.passTurn();
         thinking=false;
         demoTimer=null;
         update();
+        if(move)document.querySelector("#status").textContent=`AI落子：${reason}（${String.fromCharCode(65+(move.c>=8?move.c+1:move.c))}${game.size-move.r}）`;
         if(demoMode&&!game.ended)demoTimer=setTimeout(demoStep,650);
       },650);
     }
