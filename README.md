@@ -10,9 +10,13 @@
 
 開啟方式：
 
-1. 安裝 Node.js 18 或以上
-2. 在專案目錄執行 `npm start`
-3. 瀏覽器開啟 `http://localhost:4173`
+直接雙擊 `standalone.html`；若瀏覽器開啟受限制，可在專案目錄執行：
+
+```sh
+python -m http.server 4173
+```
+
+然後瀏覽器開啟 `http://127.0.0.1:4173`
 
 也可直接使用支援 ES module 的瀏覽器開啟 `index.html`（部分瀏覽器會限制本地 module，建議使用 HTTP server）。
 

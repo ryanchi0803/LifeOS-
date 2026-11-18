@@ -201,7 +201,7 @@
           }
         }
 
-        return moves.map(m=>{
+        const ranked=moves.map(m=>{
           let rank=-Math.abs(m.r-center)*.12*s.shape-Math.abs(m.c-center)*.12*s.shape+Math.random()*s.random;
           rank-=m.r<1||m.c<1||m.r>this.size-2||m.c>this.size-2? -2*s.shape:0;
 
@@ -250,7 +250,34 @@
             }
           }
           return {...m,rank};
-        }).sort((a,b)=>b.rank-a.rank)[0];
+        }).sort((a,b)=>b.rank-a.rank);
+
+        if(level==="advanced"||level==="expert"){
+          const rolloutCount=level==="expert"?3:2;
+          const rolloutPly=level==="expert"?8:6;
+          for(const candidate of ranked.slice(0,level==="expert"?4:3)){
+            let total=0;
+            for(let sample=0;sample<rolloutCount;sample++){
+              const before=this.snapshot();
+              if(!this.play(candidate.r,candidate.c).ok){this.restore(before);continue;}
+              for(let ply=0;ply<rolloutPly&& !this.ended;ply++){
+                const side=this.turn;
+                const choices=this.legalMoves(side);
+                if(!choices.length){this.passTurn();continue;}
+                const captures=choices.filter(m=>m.captured>0);
+                const pool=captures.length?captures:choices;
+                const choice=pool[Math.floor(Math.random()*pool.length)];
+                if(!this.play(choice.r,choice.c).ok)break;
+              }
+              const s=this.evaluatePosition(color);
+              total+=s;
+              this.restore(before);
+            }
+            candidate.rank+=total/rolloutCount*(level==="expert"?1.25:.75);
+          }
+          ranked.sort((a,b)=>b.rank-a.rank);
+        }
+        return ranked[0];
       }
       score(){
         const territory={B:0,W:0}, seen=new Set();
@@ -269,6 +296,27 @@
     const sizeSelect=document.querySelector("#size"), humanSelect=document.querySelector("#human"), modeSelect=document.querySelector("#mode"), handicapSelect=document.querySelector("#handicap"), aiLevelSelect=document.querySelector("#aiLevel"), demoBlackSelect=document.querySelector("#demoBlack"), demoWhiteSelect=document.querySelector("#demoWhite");
     let game=new GoGame(19), human="B", ai="W", aiLevel="casual", thinking=false, timer=null, demoMode=false, demoTimer=null;
 
+    async function katagoMove(color,level){
+      try{
+        const stones=[];
+        for(let r=0;r<game.size;r++)for(let c=0;c<game.size;c++)if(game.board[r][c])stones.push({r,c,color:game.board[r][c]});
+        const response=await fetch("http://127.0.0.1:4173/api/move",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({size:game.size,color,level,stones})
+        });
+        if(!response.ok)throw new Error("KataGo server unavailable");
+        const data=await response.json();
+        if(data.error)throw new Error(data.error);
+        if(data.move==="pass")return null;
+        if(data.move==="stone"&&Number.isInteger(data.row)&&Number.isInteger(data.col))return {r:data.row,c:data.col};
+        return null;
+      }catch(error){
+        document.querySelector("#status").textContent="未連線 KataGo，暫時使用本地規則 AI："+error.message;
+        return game.aiMove(color);
+      }
+    }
+
     function stars(size){return size===19?[3,9,15]:size===13?[3,6,9]:[2,4,6];}
     function draw(){
       const rect=canvas.getBoundingClientRect(), dpr=devicePixelRatio||1, w=rect.width, pad=w*.055, step=(w-pad*2)/(game.size-1);
@@ -285,7 +333,7 @@
       else{const name=game.turn==="B"?"黑棋":"白棋";document.querySelector("#badge").innerHTML=`<strong>輪到${name}</strong>`;const levelName=aiLevelSelect.options[aiLevelSelect.selectedIndex].text;document.querySelector("#status").textContent=game.turn===human?`輪到你執${name==="黑棋"?"黑":"白"}棋落子。`:`輪到 AI（${levelName}）落子。`;}
       document.querySelector("#undo").disabled=thinking||!game.history.length;document.querySelector("#pass").disabled=thinking||game.ended;draw();
     }
-    function aiTurn(){thinking=true;update();timer=setTimeout(()=>{const move=game.aiMove(ai);if(move)game.play(move.r,move.c);else game.passTurn();thinking=false;timer=null;update();},550);}
+    function aiTurn(){thinking=true;update();timer=setTimeout(async()=>{const level=aiLevelSelect.value;const move=await katagoMove(ai,level);if(move)game.play(move.r,move.c);else game.passTurn();thinking=false;timer=null;update();},550);}
     function maybeAi(){if(!game.ended&&game.turn===ai)aiTurn();}
     function stopDemo(){
       demoMode=false;
@@ -299,8 +347,9 @@
       thinking=true;
       aiLevel=game.turn==="B"?demoBlackSelect.value:demoWhiteSelect.value;
       update();
-      demoTimer=setTimeout(()=>{
-        const move=game.aiMove(game.turn);
+      demoTimer=setTimeout(async()=>{
+        const level=game.turn==="B"?demoBlackSelect.value:demoWhiteSelect.value;
+        const move=await katagoMove(game.turn,level);
         if(move)game.play(move.r,move.c);
         else game.passTurn();
         thinking=false;
