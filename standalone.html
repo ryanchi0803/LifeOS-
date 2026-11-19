@@ -197,21 +197,21 @@
           }
         }
 
-        if(s.book&&this.history.length<12){
-          const star=this.size===19?3:this.size===13?3:2;
-          const far=this.size-1-star;
-          const candidates=[[star,star],[star,far],[far,star],[far,far],[center,center]];
-          for(const [r,c] of candidates){
-            if(!this.board[r][c]){
-              const test=moves.find(m=>m.r===r&&m.c===c);
-              if(test)return {...test,reason:"角部布局：星位定式"};
-            }
-          }
-        }
-
         const ranked=moves.map(m=>{
           let rank=-Math.abs(m.r-center)*.12*s.shape-Math.abs(m.c-center)*.12*s.shape+Math.random()*s.random;
           rank-=m.r<1||m.c<1||m.r>this.size-2||m.c>this.size-2? -2*s.shape:0;
+
+          if(this.moveHistory.length<24){
+            // Prefer corner/third-line development only as a ranking bonus.
+            // Never return immediately here: later tactical and position checks must decide the move.
+            const josekiLine=this.size===19?3:this.size===13?3:2;
+            const inJosekiLine=(m.r===josekiLine||m.c===josekiLine||
+              m.r===this.size-1-josekiLine||m.c===this.size-1-josekiLine);
+            if(inJosekiLine)rank+=s.shape*3;
+            const cornerDistance=Math.min(m.r,m.c,this.size-1-m.r,this.size-1-m.c);
+            if(cornerDistance<=josekiLine+1)rank+=s.shape*2;
+            if(cornerDistance===0)rank-=s.shape*8;
+          }
 
           for(const [r,c] of this.neighbors(m.r,m.c)){
             const value=this.board[r][c];

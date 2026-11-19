@@ -28,6 +28,7 @@ python -m http.server 4173
 - 9 路棋譜庫內含 10 局公開 Mini-Go 職業對局序列；中高段位會匹配棋譜前綴並模擬對手反擊
 - 19 路加入 Lee Sedol vs AlphaGo 第一局公開棋譜開局前綴
 - 每手會在對局狀態列顯示選擇原因，例如公開棋譜、提子或局面展望
+- 第 1-24 手的角部布局僅作為評分加分，不再無條件固定跳星位
 - 支援 AI 黑／AI 白觀戰互奕，可為兩方分別設定段位
 - 中高段位加入角部星位／三三、提子防守、形狀與自殺避免等布局原則
 - 棋譜來源：https://homepages.cwi.nl/~aeb/go/games/games/other_sizes/9x9/Minigo/
